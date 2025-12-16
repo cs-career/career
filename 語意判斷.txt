@@ -1,0 +1,106 @@
+import jieba
+import jieba.posseg as pseg
+import gradio as gr
+
+class IdentityAnalyzer:
+    def __init__(self):
+        # 擴大關鍵字庫
+        keywords = [
+            "老婆", "太太", "先生", "老公", "我", "本人", "上班", "失業", "工作", "待業",
+            "想上課", "報名", "學習", "參加", "水電", "電腦", "餐飲", "烘焙", "設計", "小孩", 
+            "轉職", "工程師", "提升", "想當"
+        ]
+        for k in keywords:
+            jieba.add_word(k)
+        
+        self.family_subjects = ["老婆", "太太", "先生", "老公", "妻子", "丈夫"]
+        self.child_subjects = ["小孩", "孩子", "兒子", "女兒"]
+        self.self_subjects = ["我", "本人", "自己"]
+        
+        # 擴充課程對照表
+        self.course_map = {
+            "工業技術類": ["水電", "修車", "焊接", "冷氣", "裝修"],
+            "資訊科技類": ["電腦", "程式", "網頁", "設計", "軟體", "工程師", "資工"],
+            "餐飲烘焙類": ["餐飲", "烘焙", "廚師", "料理", "調酒", "廚藝"],
+            "商業服務類": ["美容", "美髮", "會計", "照服", "清潔"]
+        }
+
+    def analyze(self, text):
+        # 將輸入切分為子句處理
+        segments = text.replace("，", ",").replace("。", ",").split(",")
+        
+        status_me = "未偵測到資料"
+        status_spouse = "未偵測到資料"
+        who_wants_course = "未偵測到資料"
+        course_type = "未偵測到資料"
+        family_bg = "未偵測到資料"
+        marriage_status = "未偵測到資料"
+
+        for seg in segments:
+            # 判斷當前子句的主體
+            is_spouse = any(s in seg for s in self.family_subjects)
+            is_child = any(c in seg for c in self.child_subjects)
+            is_self = any(m in seg for m in self.self_subjects)
+            
+            # 若沒明確主體且含有動詞，預設為主體「本人」
+            if not is_spouse and not is_child and not is_self:
+                if any(k in seg for k in ["想", "要", "轉職", "失業"]):
+                    is_self = True
+
+            # 1. 狀態判斷
+            if any(k in seg for k in ["失業", "待業", "沒工作", "找工作"]):
+                if is_spouse: status_spouse = "待業中"
+                else: status_me = "待業中"
+            elif any(k in seg for k in ["上班", "工作", "在職", "廚師"]):
+                if is_spouse: status_spouse = "就業中"
+                elif is_self: status_me = "就業中" # 注意：此處需小心語序，"我是廚師但失業"會被下方失業邏輯覆蓋
+
+            # 2. 意圖判斷 (加入 "轉職"、"想當")
+            if any(k in seg for k in ["想", "要", "上課", "報名", "學習", "轉職", "想當", "提升"]):
+                if is_child: who_wants_course = "小孩"
+                elif is_spouse: who_wants_course = "配偶"
+                else: who_wants_course = "本人"
+
+        # 3. 課程類型與全域標籤
+        found_courses = []
+        for cat, keys in self.course_map.items():
+            if any(k in text for k in keys):
+                # 如果提到「我是廚師但想轉職工程師」，應過濾掉目前的職業(廚師)，抓取目標(工程師)
+                if "想" in text or "轉職" in text:
+                    # 邏輯：如果該關鍵字出現在「想/轉職」之後，優先判定
+                    found_courses.append(cat)
+                else:
+                    found_courses.append(cat)
+        
+        if found_courses:
+            # 針對「轉職」案例優化：如果同時出現餐飲和資訊，且有轉職意圖，應以資訊為主
+            if len(set(found_courses)) > 1 and "轉職" in text:
+                if "資訊科技類" in found_courses:
+                    course_type = "資訊科技類"
+            else:
+                course_type = "、".join(list(set(found_courses)))
+
+        if any(k in text for k in self.child_subjects):
+            family_bg = "有子女"
+            marriage_status = "已婚"
+        if any(k in text for k in self.family_subjects):
+            marriage_status = "已婚"
+
+        final_output = [
+            f"【婚姻狀況】 {marriage_status}",
+            f"【家庭背景】 {family_bg}",
+            f"【我的狀態(是否就業中)】 {status_me}",
+            f"【配偶狀態(是否就業中)】 {status_spouse}",
+            f"【誰目前想上課】 {who_wants_course}",
+            f"【課程類型】 {course_type}"
+        ]
+        return "\n".join(final_output), " | ".join(list(jieba.cut(text)))
+
+# --- Gradio 介面啟動 ---
+analyzer = IdentityAnalyzer()
+demo = gr.Interface(
+    fn=analyzer.analyze,
+    inputs=gr.Textbox(label="輸入對話", value="我是一名廚師，但上禮拜失業了，想轉職工程師，我小孩很可愛"),
+    outputs=[gr.Textbox(label="分析結果"), gr.Code(label="斷詞結果")]
+)
+demo.launch()

@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>即時語意分析引擎 - 後端測試頁面</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom": "https://esm.sh/react-dom@18.2.0",
+            "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime"
+        }
+    }
+    </script>
+    <style>
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulse-dot {
+            animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="root"></div>
+
+    <script type="module">
+        import React, { useState, useEffect } from 'https://esm.sh/react@18.2.0';
+        import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+
+        // ========== 實體詞典定義 ==========
+        const EMPLOYMENT_ENTITIES = {
+            "待業中": ["失業", "待業", "找工作", "沒有工作", "離職", "被資遣", "無業", "失業中"],
+            "在職中": ["上班", "工作", "就業", "任職", "在職", "目前工作", "現職"],
+            "學生": ["學生", "就讀", "上學", "念書", "在學"]
+        };
+
+        const FAMILY_ENTITIES = {
+            "有子女": ["兒子", "女兒", "小孩", "孩子", "子女", "讀國中", "讀小學", "讀高中", "讀大學", "國中", "小學", "高中", "大學"],
+            "已婚": ["太太", "先生", "配偶", "老公", "老婆", "結婚", "妻子", "丈夫"],
+            "單親": ["單親", "離婚", "分居"],
+            "有長輩": ["父母", "長輩", "照顧", "長照", "老人家", "老人"]
+        };
+
+        const CAREER_ENTITIES = {
+            "資訊科技": ["工程師", "程式", "軟體", "網路", "IT", "資訊", "電腦", "開發", "程式設計", "網路工程師", "軟體工程師"],
+            "餐飲": ["餐飲", "咖啡", "烘焙", "烹飪", "廚師", "料理", "煮", "餐廳"],
+            "設計": ["設計", "UI", "UX", "美編", "平面", "多媒體", "視覺", "Figma"],
+            "商業": ["行銷", "管理", "商業", "電商", "業務", "ESG"],
+            "維修": ["維修", "機械", "PLC", "自動化", "工程", "機電"],
+            "語言": ["英文", "日文", "語言", "溝通", "翻譯"],
+            "醫療": ["醫療", "照護", "長照", "護理", "健康"]
+        };
+
+        const LOCATION_ENTITIES = {
+            "台北": ["台北", "北市", "Taipei", "台北市"],
+            "新北": ["新北", "板橋", "新店", "三重", "新北市"],
+            "台中": ["台中", "中市", "Taichung", "台中市"],
+            "高雄": ["高雄", "高市", "Kaohsiung", "高雄市"],
+            "桃園": ["桃園", "桃市", "桃園市"],
+            "台南": ["台南", "南市", "台南市"],
+            "線上": ["線上", "直播", "遠距", "網路", "online", "遠端"]
+        };
+
+        const SUBSIDY_ENTITIES = {
+            "需要補助": ["補助", "補貼", "津貼", "補助金", "免費", "費用", "補助嗎", "有補助"],
+            "經濟困難": ["經濟", "困難", "沒錢", "負擔", "收入", "經濟壓力"]
+        };
+
+        const ENTITY_DICTIONARIES = {
+            "就業狀態": EMPLOYMENT_ENTITIES,
+            "家庭背景": FAMILY_ENTITIES,
+            "職業背景": CAREER_ENTITIES,
+            "地點": LOCATION_ENTITIES,
+            "補助需求": SUBSIDY_ENTITIES
+        };
+
+        // ========== 推論規則 ==========
+        const INFERENCE_RULES = [
+            {
+                condition: (entities, context) => {
+                    return entities.some(e => 
+                        e.category === "就業狀態" && 
+                        ["失業", "待業", "找工作", "沒有工作", "離職", "被資遣"].includes(e.text)
+                    );
+                },
+                inference: {
+                    category: "就業狀態",
+                    tag: "狀態:待業中",
+                    confidence: 99,
+                    reason: "明確提及失業相關詞彙"
+                }
+            },
+            {
+                condition: (entities, context) => {
+                    return entities.some(e => 
+                        e.category === "家庭背景" && 
+                        ["兒子", "女兒", "小孩", "孩子", "子女"].includes(e.text)
+                    );
+                },
+                inference: {
+                    category: "家庭背景",
+                    tag: "有子女",
+                    confidence: 98,
+                    reason: "明確提及子女"
+                }
+            },
+            {
+                condition: (entities, context) => {
+                    return entities.some(e => 
+                        e.category === "家庭背景" && 
+                        ["太太", "先生", "配偶", "老公", "老婆", "妻子", "丈夫"].includes(e.text)
+                    );
+                },
+                inference: {
+                    category: "就業狀態",
+                    tag: "已婚(推論)",
+                    confidence: 85,
+                    reason: "提及配偶相關詞彙"
+                }
+            },
+            {
+                condition: (entities, context) => {
+                    const hasWorkMention = entities.some(e => 
+                        e.category === "就業狀態" && e.text === "上班"
+                    );
+                    const hasNegative = context.includes("沒有") || context.includes("沒") || 
+                                       context.includes("不") || context.includes("無");
+                    return hasWorkMention && hasNegative;
+                },
+                inference: {
+                    category: "就業狀態",
+                    tag: "狀態:待業中",
+                    confidence: 95,
+                    reason: "負面上下文 + 工作相關詞彙"
+                }
+            },
+            {
+                condition: (entities, context) => {
+                    return entities.some(e => 
+                        e.category === "補助需求" && 
+                        ["補助", "補貼", "津貼", "補助金", "免費", "有補助"].includes(e.text)
+                    );
+                },
+                inference: {
+                    category: "補助需求",
+                    tag: "需要補助",
+                    confidence: 90,
+                    reason: "明確提及補助需求"
+                }
+            },
+            {
+                condition: (entities, context) => {
+                    return entities.some(e => e.category === "職業背景");
+                },
+                inference: (entities, context) => {
+                    const careerEntity = entities.find(e => e.category === "職業背景");
+                    return {
+                        category: "職業背景",
+                        tag: `興趣領域:${careerEntity.tag}`,
+                        confidence: 85,
+                        reason: `提及${careerEntity.tag}相關詞彙`
+                    };
+                }
+            }
+        ];
+
+        // ========== 核心分析函數 ==========
+        function extractEntities(text, entityDictionaries = ENTITY_DICTIONARIES) {
+            if (!text || typeof text !== 'string') {
+                return [];
+            }
+
+            const entities = [];
+            const normalizedText = text.trim();
+
+            for (const [category, dictionary] of Object.entries(entityDictionaries)) {
+                for (const [tag, keywords] of Object.entries(dictionary)) {
+                    for (const keyword of keywords) {
+                        const index = normalizedText.indexOf(keyword);
+                        if (index !== -1) {
+                            const isDuplicate = entities.some(e => 
+                                e.text === keyword && 
+                                e.category === category && 
+                                e.tag === tag
+                            );
+                            
+                            if (!isDuplicate) {
+                                entities.push({
+                                    text: keyword,
+                                    category,
+                                    tag,
+                                    position: index
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            return entities.sort((a, b) => a.position - b.position);
+        }
+
+        function inferUserProfile(entities, context, currentProfile = {}) {
+            if (!entities || entities.length === 0) {
+                return [];
+            }
+
+            const inferences = [];
+
+            for (const rule of INFERENCE_RULES) {
+                try {
+                    if (rule.condition(entities, context)) {
+                        let inference;
+                        if (typeof rule.inference === 'function') {
+                            inference = rule.inference(entities, context);
+                        } else {
+                            inference = { ...rule.inference };
+                        }
+
+                        const sourceEntities = entities.filter(e => 
+                            rule.condition([e], context)
+                        );
+
+                        inferences.push({
+                            ...inference,
+                            timestamp: new Date().toISOString(),
+                            sourceEntities: sourceEntities.length > 0 ? sourceEntities : entities.slice(0, 1)
+                        });
+                    }
+                } catch (error) {
+                    console.warn('推論規則執行錯誤:', error);
+                }
+            }
+
+            return inferences;
+        }
+
+        function updateUserProfile(profile, inferences) {
+            if (!inferences || inferences.length === 0) {
+                return profile;
+            }
+
+            const updated = {
+                employmentStatus: profile.employmentStatus || null,
+                familyBackground: {
+                    hasChildren: profile.familyBackground?.hasChildren || { value: false, confidence: 0, sources: [] },
+                    maritalStatus: profile.familyBackground?.maritalStatus || { value: null, confidence: 0, sources: [] },
+                    hasElderly: profile.familyBackground?.hasElderly || { value: false, confidence: 0, sources: [] }
+                },
+                careerBackground: {
+                    currentDomain: profile.careerBackground?.currentDomain || [],
+                    interestedDomain: profile.careerBackground?.interestedDomain || [],
+                    previousJobs: profile.careerBackground?.previousJobs || []
+                },
+                locationPreference: {
+                    preferred: profile.locationPreference?.preferred || [],
+                    avoid: profile.locationPreference?.avoid || []
+                },
+                subsidyNeed: {
+                    requiresSubsidy: profile.subsidyNeed?.requiresSubsidy || false,
+                    urgency: profile.subsidyNeed?.urgency || "低",
+                    reasons: profile.subsidyNeed?.reasons || []
+                },
+                conversationHistory: profile.conversationHistory || []
+            };
+
+            for (const inference of inferences) {
+                switch (inference.category) {
+                    case "就業狀態":
+                        if (!updated.employmentStatus || 
+                            inference.confidence > updated.employmentStatus.confidence) {
+                            updated.employmentStatus = {
+                                value: inference.tag,
+                                confidence: inference.confidence,
+                                sources: [...(updated.employmentStatus?.sources || []), inference]
+                            };
+                        }
+                        break;
+
+                    case "家庭背景":
+                        if (inference.tag === "有子女") {
+                            if (!updated.familyBackground.hasChildren.value || 
+                                inference.confidence > updated.familyBackground.hasChildren.confidence) {
+                                updated.familyBackground.hasChildren = {
+                                    value: true,
+                                    confidence: inference.confidence,
+                                    sources: [...(updated.familyBackground.hasChildren.sources || []), inference]
+                                };
+                            }
+                        } else if (inference.tag === "已婚(推論)") {
+                            if (!updated.familyBackground.maritalStatus.value || 
+                                inference.confidence > updated.familyBackground.maritalStatus.confidence) {
+                                updated.familyBackground.maritalStatus = {
+                                    value: "已婚",
+                                    confidence: inference.confidence,
+                                    sources: [...(updated.familyBackground.maritalStatus.sources || []), inference]
+                                };
+                            }
+                        }
+                        break;
+
+                    case "職業背景":
+                        if (inference.tag && inference.tag.startsWith("興趣領域:")) {
+                            const domain = inference.tag.replace("興趣領域:", "");
+                            if (!updated.careerBackground.interestedDomain.includes(domain)) {
+                                updated.careerBackground.interestedDomain.push(domain);
+                            }
+                        }
+                        break;
+
+                    case "補助需求":
+                        if (inference.tag === "需要補助") {
+                            updated.subsidyNeed.requiresSubsidy = true;
+                            if (!updated.subsidyNeed.reasons.includes(inference.reason)) {
+                                updated.subsidyNeed.reasons.push(inference.reason);
+                            }
+                            if (inference.confidence >= 90) {
+                                updated.subsidyNeed.urgency = "高";
+                            } else if (inference.confidence >= 80) {
+                                updated.subsidyNeed.urgency = "中";
+                            }
+                        }
+                        break;
+
+                    case "地點":
+                        if (inference.tag && !updated.locationPreference.preferred.includes(inference.tag)) {
+                            updated.locationPreference.preferred.push(inference.tag);
+                        }
+                        break;
+                }
+            }
+
+            return updated;
+        }
+
+        function analyzeUserInput(userInput, currentProfile = {}) {
+            const entities = extractEntities(userInput);
+            const inferences = inferUserProfile(entities, userInput, currentProfile);
+            const updatedProfile = updateUserProfile(currentProfile, inferences);
+            
+            return {
+                entities,
+                inferences,
+                updatedProfile
+            };
+        }
+
+        // ========== React 組件 ==========
+        function SemanticAnalysisEngine({ userInput, onProfileUpdate }) {
+            const [userProfile, setUserProfile] = useState({
+                employmentStatus: null,
+                familyBackground: {
+                    hasChildren: { value: false, confidence: 0, sources: [] },
+                    maritalStatus: { value: null, confidence: 0, sources: [] },
+                    hasElderly: { value: false, confidence: 0, sources: [] }
+                },
+                careerBackground: {
+                    currentDomain: [],
+                    interestedDomain: [],
+                    previousJobs: []
+                },
+                locationPreference: {
+                    preferred: [],
+                    avoid: []
+                },
+                subsidyNeed: {
+                    requiresSubsidy: false,
+                    urgency: "低",
+                    reasons: []
+                },
+                conversationHistory: []
+            });
+            
+            const [inferenceLog, setInferenceLog] = useState([]);
+            const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+            useEffect(() => {
+                if (!userInput || !userInput.trim()) {
+                    return;
+                }
+                
+                setIsAnalyzing(true);
+                
+                setTimeout(() => {
+                    const analysis = analyzeUserInput(userInput, userProfile);
+                    
+                    const logEntry = {
+                        timestamp: new Date().toLocaleTimeString('zh-TW', { 
+                            hour12: true,
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                        }),
+                        entities: analysis.entities,
+                        inferences: analysis.inferences,
+                        userInput
+                    };
+                    
+                    setInferenceLog(prev => [...prev, logEntry]);
+                    setUserProfile(analysis.updatedProfile);
+                    setIsAnalyzing(false);
+                    
+                    if (onProfileUpdate) {
+                        onProfileUpdate(analysis.updatedProfile);
+                    }
+                }, 300);
+                
+            }, [userInput]);
+
+            const getConfidenceColor = (confidence) => {
+                if (confidence >= 90) return 'text-green-400';
+                if (confidence >= 80) return 'text-yellow-400';
+                return 'text-orange-400';
+            };
+
+            return React.createElement('div', {
+                className: "w-full h-full bg-slate-900 text-white rounded-lg shadow-xl flex flex-col overflow-hidden border border-slate-700"
+            }, [
+                // Header
+                React.createElement('div', {
+                    key: 'header',
+                    className: "bg-slate-800 p-4 flex justify-between items-center border-b border-slate-700"
+                }, [
+                    React.createElement('h2', {
+                        key: 'title',
+                        className: "text-lg font-bold text-white"
+                    }, "即時語意分析引擎"),
+                    React.createElement('button', {
+                        key: 'logs-btn',
+                        className: "text-xs text-slate-400 hover:text-white px-2 py-1 rounded"
+                    }, "System Logs")
+                ]),
+
+                // Content
+                React.createElement('div', {
+                    key: 'content',
+                    className: "flex-1 overflow-y-auto p-4 space-y-6"
+                }, [
+                    // System Status
+                    React.createElement('div', {
+                        key: 'status',
+                        className: "flex items-center gap-2"
+                    }, [
+                        React.createElement('div', {
+                            key: 'dot',
+                            className: `w-2 h-2 rounded-full ${isAnalyzing ? 'bg-green-400 pulse-dot' : 'bg-green-500'}`
+                        }),
+                        React.createElement('span', {
+                            key: 'status-text',
+                            className: "text-sm text-slate-300"
+                        }, isAnalyzing ? 'AI Analyzing Context...' : 'System Idle. Waiting for input.')
+                    ]),
+
+                    // Detected Profile
+                    React.createElement('div', { key: 'profile' }, [
+                        React.createElement('h3', {
+                            key: 'profile-title',
+                            className: "text-sm font-bold text-slate-400 mb-3 uppercase tracking-wide"
+                        }, "DETECTED PROFILE"),
+                        
+                        (!userProfile.employmentStatus && 
+                         !userProfile.familyBackground.hasChildren.value &&
+                         !userProfile.careerBackground.interestedDomain.length &&
+                         !userProfile.subsidyNeed.requiresSubsidy) ? 
+                        React.createElement('div', {
+                            key: 'empty',
+                            className: "bg-slate-800 p-4 rounded border border-slate-700 text-slate-400 text-sm"
+                        }, "尚未偵測到使用者特徵") :
+                        React.createElement('div', {
+                            key: 'profile-items',
+                            className: "space-y-2"
+                        }, [
+                            userProfile.employmentStatus && React.createElement('div', {
+                                key: 'employment',
+                                className: "bg-slate-800 p-3 rounded border border-slate-700"
+                            }, [
+                                React.createElement('div', {
+                                    key: 'label',
+                                    className: "text-xs text-slate-400 mb-1"
+                                }, "就業狀態"),
+                                React.createElement('div', {
+                                    key: 'value',
+                                    className: "flex items-center justify-between"
+                                }, [
+                                    React.createElement('span', {
+                                        key: 'tag',
+                                        className: "text-sm font-medium text-white"
+                                    }, userProfile.employmentStatus.value),
+                                    React.createElement('span', {
+                                        key: 'confidence',
+                                        className: `text-xs font-bold ${getConfidenceColor(userProfile.employmentStatus.confidence)}`
+                                    }, `${userProfile.employmentStatus.confidence}%`)
+                                ])
+                            ]),
+                            
+                            userProfile.familyBackground.hasChildren.value && React.createElement('div', {
+                                key: 'children',
+                                className: "bg-slate-800 p-3 rounded border border-slate-700"
+                            }, [
+                                React.createElement('div', {
+                                    key: 'label',
+                                    className: "text-xs text-slate-400 mb-1"
+                                }, "家庭背景"),
+                                React.createElement('div', {
+                                    key: 'value',
+                                    className: "flex items-center justify-between"
+                                }, [
+                                    React.createElement('span', {
+                                        key: 'tag',
+                                        className: "text-sm font-medium text-white"
+                                    }, "有子女"),
+                                    React.createElement('span', {
+                                        key: 'confidence',
+                                        className: `text-xs font-bold ${getConfidenceColor(userProfile.familyBackground.hasChildren.confidence)}`
+                                    }, `${userProfile.familyBackground.hasChildren.confidence}%`)
+                                ])
+                            ]),
+                            
+                            userProfile.familyBackground.maritalStatus.value && React.createElement('div', {
+                                key: 'marital',
+                                className: "bg-slate-800 p-3 rounded border border-slate-700"
+                            }, [
+                                React.createElement('div', {
+                                    key: 'label',
+                                    className: "text-xs text-slate-400 mb-1"
+                                }, "就業狀態"),
+                                React.createElement('div', {
+                                    key: 'value',
+                                    className: "flex items-center justify-between"
+                                }, [
+                                    React.createElement('span', {
+                                        key: 'tag',
+                                        className: "text-sm font-medium text-white"
+                                    }, `${userProfile.familyBackground.maritalStatus.value}(推論)`),
+                                    React.createElement('span', {
+                                        key: 'confidence',
+                                        className: `text-xs font-bold ${getConfidenceColor(userProfile.familyBackground.maritalStatus.confidence)}`
+                                    }, `${userProfile.familyBackground.maritalStatus.confidence}%`)
+                                ])
+                            ]),
+                            
+                            userProfile.subsidyNeed.requiresSubsidy && React.createElement('div', {
+                                key: 'subsidy',
+                                className: "bg-slate-800 p-3 rounded border border-slate-700"
+                            }, [
+                                React.createElement('div', {
+                                    key: 'label',
+                                    className: "text-xs text-slate-400 mb-1"
+                                }, "補助需求"),
+                                React.createElement('div', {
+                                    key: 'value',
+                                    className: "flex items-center justify-between"
+                                }, [
+                                    React.createElement('span', {
+                                        key: 'tag',
+                                        className: "text-sm font-medium text-white"
+                                    }, "需要補助"),
+                                    React.createElement('span', {
+                                        key: 'urgency',
+                                        className: "text-xs font-bold text-yellow-400"
+                                    }, userProfile.subsidyNeed.urgency)
+                                ])
+                            ])
+                        ])
+                    ]),
+
+                    // Inference Log
+                    inferenceLog.length > 0 && React.createElement('div', { key: 'log' }, [
+                        React.createElement('h3', {
+                            key: 'log-title',
+                            className: "text-sm font-bold text-slate-400 mb-3 uppercase tracking-wide"
+                        }, "REAL-TIME INFERENCE LOG"),
+                        React.createElement('div', {
+                            key: 'log-entries',
+                            className: "space-y-2 max-h-48 overflow-y-auto"
+                        }, inferenceLog.slice().reverse().map((entry, idx) => 
+                            React.createElement('div', {
+                                key: idx,
+                                className: "bg-slate-800 p-3 rounded border border-slate-700 text-xs"
+                            }, [
+                                React.createElement('div', {
+                                    key: 'timestamp',
+                                    className: "text-slate-400 mb-1"
+                                }, `[${entry.timestamp}]`),
+                                ...entry.inferences.map((inf, i) => 
+                                    React.createElement('div', {
+                                        key: i,
+                                        className: "text-slate-300 mt-1"
+                                    }, `Extracted entity "${inf.sourceEntities[0]?.text || 'N/A'}" → Mapped to tag [${inf.tag}]`)
+                                )
+                            ])
+                        ))
+                    ])
+                ])
+            ]);
+        }
+
+        // ========== 主應用組件 ==========
+        function App() {
+            const [input, setInput] = useState("");
+            const [lastUserInput, setLastUserInput] = useState("");
+            const [userProfile, setUserProfile] = useState(null);
+            const [testCases, setTestCases] = useState([]);
+            
+            // 監聽來自 ChatBot 的訊息
+            useEffect(() => {
+                const handleStorageChange = (e) => {
+                    if (e.key === 'chatbot-user-input') {
+                        const userInput = e.newValue;
+                        if (userInput) {
+                            setInput(userInput);
+                            setLastUserInput(userInput);
+                        }
+                    }
+                };
+                
+                window.addEventListener('storage', handleStorageChange);
+                
+                // 檢查是否有初始資料
+                const initialInput = localStorage.getItem('chatbot-user-input');
+                if (initialInput) {
+                    setInput(initialInput);
+                    setLastUserInput(initialInput);
+                }
+                
+                return () => {
+                    window.removeEventListener('storage', handleStorageChange);
+                };
+            }, []);
+
+            const handleSend = () => {
+                if (!input.trim()) return;
+                setLastUserInput(input);
+                setInput("");
+            };
+
+            const handleTestCase = (testCase) => {
+                setInput(testCase);
+                setLastUserInput(testCase);
+            };
+
+            return React.createElement('div', {
+                className: "min-h-screen bg-gray-100 p-8"
+            }, [
+                // Header
+                React.createElement('div', {
+                    key: 'header',
+                    className: "mb-6"
+                }, [
+                    React.createElement('h1', {
+                        key: 'title',
+                        className: "text-3xl font-bold text-gray-800 mb-2"
+                    }, "即時語意分析引擎 - 後端測試頁面"),
+                    React.createElement('p', {
+                        key: 'desc',
+                        className: "text-gray-600"
+                    }, "此頁面用於測試和展示語意分析引擎的功能，供後端開發人員使用")
+                ]),
+
+                // Main Content
+                React.createElement('div', {
+                    key: 'main',
+                    className: "grid grid-cols-1 lg:grid-cols-2 gap-6"
+                }, [
+                    // Left Panel - Input
+                    React.createElement('div', {
+                        key: 'left',
+                        className: "bg-white rounded-lg shadow-lg p-6"
+                    }, [
+                        React.createElement('h2', {
+                            key: 'title',
+                            className: "text-xl font-bold mb-4"
+                        }, "測試輸入"),
+                        
+                        React.createElement('div', {
+                            key: 'input-group',
+                            className: "mb-4"
+                        }, [
+                            React.createElement('textarea', {
+                                key: 'textarea',
+                                value: input,
+                                onChange: (e) => setInput(e.target.value),
+                                placeholder: "輸入測試文字...",
+                                className: "w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500",
+                                rows: 4
+                            }),
+                            React.createElement('button', {
+                                key: 'send-btn',
+                                onClick: handleSend,
+                                className: "mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                            }, "分析")
+                        ]),
+
+                        React.createElement('div', {
+                            key: 'chatbot-status',
+                            className: "mt-4"
+                        }, [
+                            React.createElement('div', {
+                                key: 'status-box',
+                                className: "bg-blue-50 border border-blue-200 rounded-lg p-3"
+                            }, [
+                                React.createElement('div', {
+                                    key: 'status-icon',
+                                    className: "flex items-center gap-2 text-sm text-blue-700"
+                                }, [
+                                    React.createElement('span', {
+                                        key: 'icon',
+                                        className: "text-lg"
+                                    }, "🤖"),
+                                    React.createElement('span', {
+                                        key: 'text',
+                                        className: "font-medium"
+                                    }, "即時同步 ChatBot 對話")
+                                ]),
+                                React.createElement('p', {
+                                    key: 'hint',
+                                    className: "text-xs text-blue-600 mt-1"
+                                }, "當您在主網站的 ChatBot 中輸入訊息時，內容會自動同步到此頁面進行分析")
+                            ])
+                        ])
+                    ]),
+
+                    // Right Panel - Analysis Engine
+                    React.createElement('div', {
+                        key: 'right',
+                        className: "h-[800px]"
+                    }, React.createElement(SemanticAnalysisEngine, {
+                        userInput: lastUserInput,
+                        onProfileUpdate: setUserProfile
+                    }))
+                ])
+            ]);
+        }
+
+        // ========== 渲染應用 ==========
+        const root = createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+    </script>
+</body>
+</html>
+

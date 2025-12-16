@@ -1,0 +1,822 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Search, MapPin, Calendar, Clock, DollarSign, 
+  MessageCircle, X, Send, User, Briefcase, 
+  Zap, GraduationCap, ChevronRight, Star, 
+  Menu, Bell, Filter, Award, BookOpen
+} from 'lucide-react';
+
+// --- 1. 核心資料庫 (課程資訊.json) ---
+const COURSES_DATA = [
+  {
+    "id": 1,
+    "domain": "資訊科技",
+    "type": "在職",
+    "title": "Python 大數據分析實戰班",
+    "period": "2026/02/17 ~ 2026/04/23",
+    "time": "每週二、四 19:00-22:00",
+    "location": "台北數位園區",
+    "instructor": "李數據 博士",
+    "price": 12000,
+    "tags": ["Python", "大數據", "資料分析", "AI", "程式設計"],
+    "rating": 4.8,
+    "employmentRate": "92%"
+  },
+  {
+    "id": 2,
+    "domain": "資訊科技",
+    "type": "職前",
+    "title": "前端工程師養成：React 全攻略",
+    "period": "2026/03/02 ~ 2026/05/29",
+    "time": "週一至週五 09:00-16:00",
+    "location": "線上直播 (Zoom)",
+    "instructor": "王前端 資深工程師",
+    "price": 45000,
+    "tags": ["前端", "React", "JavaScript", "網頁開發", "RWD", "就業養成"],
+    "rating": 4.9,
+    "employmentRate": "95%"
+  },
+  {
+    "id": 3,
+    "domain": "資訊科技",
+    "type": "在職",
+    "title": "AWS 雲端架構師認證班",
+    "period": "2026/03/09 ~ 2026/05/27",
+    "time": "每週一、三 19:00-22:00",
+    "location": "台中軟體園區 201 室",
+    "instructor": "張雲端 架構師",
+    "price": 18000,
+    "tags": ["雲端", "AWS", "伺服器", "IT", "考照"],
+    "rating": 4.7,
+    "employmentRate": "88%"
+  },
+  {
+    "id": 4,
+    "domain": "資訊科技",
+    "type": "在職",
+    "title": "資安防護與倫理駭客入門",
+    "period": "2026/03/06 ~ 2026/06/26",
+    "time": "每週五 18:30-21:30",
+    "location": "台北信義培訓中心",
+    "instructor": "陳黑客 資安顧問",
+    "price": 13500,
+    "tags": ["資安", "駭客", "網路安全", "Linux", "系統管理"],
+    "rating": 4.6,
+    "employmentRate": "90%"
+  },
+  {
+    "id": 5,
+    "domain": "商業管理",
+    "type": "在職",
+    "title": "數位行銷與 SEO 流量密碼",
+    "period": "2026/03/04 ~ 2026/05/20",
+    "time": "每週三 19:00-22:00",
+    "location": "線上直播 (Google Meet)",
+    "instructor": "林行銷 總監",
+    "price": 8000,
+    "tags": ["行銷", "SEO", "社群小編", "廣告投放", "流量"],
+    "rating": 4.5,
+    "employmentRate": "85%"
+  },
+  {
+    "id": 6,
+    "domain": "商業管理",
+    "type": "在職",
+    "title": "PMP 專案管理實務認證班",
+    "period": "2026/03/07 ~ 2026/05/09",
+    "time": "每週六 13:00-17:00",
+    "location": "新北板橋商務中心",
+    "instructor": "郭專案 顧問",
+    "price": 22000,
+    "tags": ["專案管理", "PMP", "管理", "商業", "敏捷開發"],
+    "rating": 4.8,
+    "employmentRate": "N/A"
+  },
+  {
+    "id": 9,
+    "domain": "設計多媒體",
+    "type": "職前",
+    "title": "UI/UX 使用者介面設計就業班",
+    "period": "2026/03/02 ~ 2026/06/05",
+    "time": "週一至週五 09:00-16:00",
+    "location": "台北中山設計坊",
+    "instructor": "趙介面 設計師",
+    "price": 52000,
+    "tags": ["UI/UX", "Figma", "網頁設計", "App設計", "美編", "作品集"],
+    "rating": 4.9,
+    "employmentRate": "91%"
+  },
+  {
+    "id": 10,
+    "domain": "設計多媒體",
+    "type": "在職",
+    "title": "商業平面設計：PS + AI 整合運用",
+    "period": "2026/03/03 ~ 2026/05/22",
+    "time": "每週二、五 18:30-21:30",
+    "location": "台中勤美教學中心",
+    "instructor": "黃視覺 總監",
+    "price": 11000,
+    "tags": ["平面設計", "Photoshop", "Illustrator", "修圖", "Adobe"],
+    "rating": 4.6,
+    "employmentRate": "82%"
+  },
+  {
+    "id": 14,
+    "domain": "餐飲觀光",
+    "type": "職前",
+    "title": "西餐烹飪專業人才培訓班",
+    "period": "2026/02/23 ~ 2026/05/22",
+    "time": "週一至週五 08:30-16:30",
+    "location": "新北餐旅職業學校",
+    "instructor": "鄭主廚",
+    "price": 38000,
+    "tags": ["西餐", "證照", "烹飪", "料理", "丙級", "就業養成"],
+    "rating": 4.7,
+    "employmentRate": "96%"
+  },
+  {
+    "id": 18,
+    "domain": "語言溝通",
+    "type": "在職",
+    "title": "日文 N3 檢定衝刺班",
+    "period": "2026/03/05 ~ 2026/06/25",
+    "time": "每週四 19:00-22:00",
+    "location": "台北車站語言中心",
+    "instructor": "佐藤 老師",
+    "price": 8500,
+    "tags": ["日文", "JLPT", "檢定", "第二外語", "日本"],
+    "rating": 4.5,
+    "employmentRate": "N/A"
+  },
+  {
+    "id": 12,
+    "domain": "設計多媒體",
+    "type": "在職",
+    "title": "Blender 3D 模型建置入門",
+    "period": "2026/03/05 ~ 2026/05/28",
+    "time": "每週四 19:00-22:00",
+    "location": "線上直播 (Discord)",
+    "instructor": "楊立體 動畫師",
+    "price": 9000,
+    "tags": ["3D", "Blender", "動畫", "遊戲設計", "建模"],
+    "rating": 4.8,
+    "employmentRate": "85%"
+  },
+  {
+    "id": 13,
+    "domain": "餐飲觀光",
+    "type": "在職",
+    "title": "專業義式咖啡師拉花培訓",
+    "period": "2026/03/07 ~ 2026/05/23",
+    "time": "每週六 14:00-17:00",
+    "location": "台北大安烘豆實驗室",
+    "instructor": "許咖啡 冠軍師",
+    "price": 14000,
+    "tags": ["咖啡", "拉花", "餐飲", "Barista", "創業"],
+    "rating": 4.9,
+    "employmentRate": "88%"
+  }
+];
+
+// --- 2. 輔助功能函式 ---
+const filterCourses = (preferences) => {
+  return COURSES_DATA.filter(course => {
+    // 篩選身分/類型
+    if (preferences.type && course.type !== preferences.type) {
+      // 如果用戶選職前，但課程是在職，過濾掉 (除非有特殊邏輯，這裡簡化處理)
+      // 若用戶選在職，通常不看職前全日制
+      // 但為了展示更多結果，若結果太少可以放寬
+    }
+    
+    // 篩選領域
+    if (preferences.domain && preferences.domain.length > 0) {
+      const match = preferences.domain.some(d => course.domain === d || course.title.includes(d) || course.tags.some(t => t.includes(d)));
+      if (!match) return false;
+    }
+
+    // 篩選地點 (包含線上)
+    if (preferences.location && preferences.location.length > 0) {
+      const isOnline = course.location.includes("線上") || course.location.includes("直播");
+      const matchLoc = preferences.location.some(l => course.location.includes(l));
+      if (!matchLoc && !isOnline) return false;
+    }
+
+    return true;
+  });
+};
+
+// --- 3. Chatbot 元件 ---
+const ChatBot = ({ onCourseClick }) => {
+  const [isOpen, setIsOpen] = useState(false); // 預設關閉，顯示縮圖
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [phase, setPhase] = useState("INIT"); // INIT, INTEREST, LOCATION, RESULT
+  const [preferences, setPreferences] = useState({
+    type: "", // 職前 or 在職
+    domain: [],
+    location: [],
+    time: []
+  });
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isOpen]);
+
+  // 重置 chatbot
+  const handleReset = () => {
+    setPhase("INIT");
+    setPreferences({
+      type: "",
+      domain: [],
+      location: [],
+      time: []
+    });
+    setInput("");
+    // 重置並顯示歡迎訊息
+    setMessages([
+      {
+        id: Date.now(),
+        sender: "bot",
+        text: "嗨！我是您的職涯領航員 🚀。準備好開啟新航道了嗎？為了幫您尋找合適的補助課程，請先告訴我您目前的狀態是？",
+        options: [
+          { label: "🚀 充電再出發 (待業)", value: "職前", type: "card", desc: "找全額補助職前訓練" },
+          { label: "⚡ 職場升級中 (在職)", value: "在職", type: "card", desc: "下班進修、三年七萬" },
+          { label: "🎓 新手村探險 (青年)", value: "職前", type: "card", desc: "產業新尖兵計畫" },
+        ]
+      }
+    ]);
+  };
+  
+  // 處理課程點擊，滾動到主頁面對應課程
+  const handleCourseClick = (courseId) => {
+    if (onCourseClick) {
+      onCourseClick(courseId);
+    }
+  };
+
+  // 初始化歡迎訊息
+  useEffect(() => {
+    if (messages.length === 0) {
+      setMessages([
+        {
+          id: 1,
+          sender: "bot",
+          text: "嗨！我是您的職涯領航員 🚀。準備好開啟新航道了嗎？為了幫您尋找合適的補助課程，請先告訴我您目前的狀態是？",
+          options: [
+            { label: "🚀 充電再出發 (待業)", value: "職前", type: "card", desc: "找全額補助職前訓練" },
+            { label: "⚡ 職場升級中 (在職)", value: "在職", type: "card", desc: "下班進修、三年七萬" },
+            { label: "🎓 新手村探險 (青年)", value: "職前", type: "card", desc: "產業新尖兵計畫" },
+          ]
+        }
+      ]);
+    }
+  }, []);
+
+  const handleOptionClick = (option, e) => {
+    // 阻止事件冒泡，避免影響主頁面的其他操作
+    if (e) {
+      e.stopPropagation();
+    }
+    const newMessages = [...messages, { id: Date.now(), sender: "user", text: option.label }];
+    setMessages(newMessages);
+
+    // 狀態機邏輯
+    setTimeout(() => {
+      let botResponse = {};
+      
+      if (phase === "INIT") {
+        const newPrefs = { ...preferences, type: option.value };
+        setPreferences(newPrefs);
+        setPhase("INTEREST");
+        botResponse = {
+          id: Date.now() + 1,
+          sender: "bot",
+          text: "了解！您想在哪個 **『領域』** 充電升級呢？",
+          options: [
+            { label: "💻 資訊科技", value: "資訊科技", type: "chip" },
+            { label: "📊 商業管理", value: "商業管理", type: "chip" },
+            { label: "🎨 設計多媒體", value: "設計多媒體", type: "chip" },
+            { label: "☕ 餐飲觀光", value: "餐飲觀光", type: "chip" },
+            { label: "🗣️ 語言溝通", value: "語言溝通", type: "chip" }
+          ],
+          allowInput: true,
+          placeholder: "或輸入：我想學剪影片..."
+        };
+      } else if (phase === "INTEREST") {
+        const selectedDomain = option.value;
+        const newPrefs = { ...preferences, domain: [selectedDomain] };
+        setPreferences(newPrefs);
+        setPhase("LOCATION");
+        botResponse = {
+          id: Date.now() + 1,
+          sender: "bot",
+          text: "好的，最後確認座標。為了方便您上課，您希望在 **哪個地區**？",
+          options: [
+            { label: "台北", value: "台北", type: "chip" },
+            { label: "新北", value: "新北", type: "chip" },
+            { label: "台中", value: "台中", type: "chip" },
+            { label: "高雄", value: "高雄", type: "chip" },
+            { label: "線上/直播", value: "線上", type: "chip" },
+          ],
+          allowInput: true,
+          placeholder: "例如：平日晚上、假日..."
+        };
+      } else if (phase === "LOCATION") {
+        const newPrefs = { ...preferences, location: [option.value] };
+        setPreferences(newPrefs);
+        setPhase("RESULT");
+        
+        const results = filterCourses(newPrefs);
+        const count = results.length;
+        
+        botResponse = {
+          id: Date.now() + 1,
+          sender: "bot",
+          text: `導航參數設定完成！根據您的需求，我為您生成了這張 **【未來職涯預覽卡】**，並找到 **${count}** 堂最速配的課程：`,
+          isResult: true,
+          courses: results.slice(0, 3) // 只顯示前3個
+        };
+      }
+
+      setMessages(prev => [...prev, botResponse]);
+    }, 600);
+  };
+
+  const handleSend = (e) => {
+    // 阻止事件冒泡，避免影響主頁面的其他操作
+    if (e) {
+      e.stopPropagation();
+    }
+    if (!input.trim()) return;
+    const userMsg = { id: Date.now(), sender: "user", text: input };
+    setMessages(prev => [...prev, userMsg]);
+    const currentInput = input;
+    setInput("");
+
+    // 簡單的文字輸入處理邏輯
+    setTimeout(() => {
+      let botResponse = {};
+      
+      // 如果是在興趣階段輸入文字
+      if (phase === "INTEREST") {
+         // 簡單關鍵字對應 (模擬 NLU)
+         let domain = "資訊科技";
+         if (currentInput.includes("煮") || currentInput.includes("咖啡")) domain = "餐飲觀光";
+         if (currentInput.includes("畫") || currentInput.includes("設計")) domain = "設計多媒體";
+         
+         const newPrefs = { ...preferences, domain: [domain] };
+         setPreferences(newPrefs);
+         setPhase("LOCATION");
+         botResponse = {
+            id: Date.now() + 1,
+            sender: "bot",
+            text: `了解，您對 ${currentInput} 相關領域感興趣。那地點希望在哪邊呢？`,
+            options: [
+              { label: "台北", value: "台北", type: "chip" },
+              { label: "新北", value: "新北", type: "chip" },
+              { label: "台中", value: "台中", type: "chip" },
+              { label: "線上", value: "線上", type: "chip" },
+            ],
+            allowInput: true
+         };
+      } else {
+        // 一般對話或 fallback
+        botResponse = {
+          id: Date.now() + 1,
+          sender: "bot",
+          text: "我目前還在學習解讀自由文字，您可以試著點擊上方的選項，或是聯絡客服專線 0800-123-456。",
+        };
+      }
+      
+      setMessages(prev => [...prev, botResponse]);
+    }, 800);
+  };
+
+  return (
+    <div 
+      className="fixed bottom-6 right-6 z-50 flex flex-col items-end font-sans"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onMouseUp={(e) => e.stopPropagation()}
+    >
+      {/* 展開後的聊天視窗 */}
+      {isOpen && (
+        <div 
+          className="mb-4 w-[380px] h-[600px] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200 animate-in fade-in slide-in-from-bottom-10 duration-300"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="bg-blue-600 p-4 flex justify-between items-center text-white">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-blue-600">
+                <Zap size={24} fill="currentColor" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">職涯領航員</h3>
+                <div className="flex items-center gap-1 text-xs opacity-90">
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                  Online
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsOpen(false);
+              }} 
+              className="hover:bg-blue-700 p-1 rounded"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-4">
+            {messages.map((msg) => (
+              <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] ${msg.sender === 'user' ? 'bg-blue-600 text-white' : 'bg-white text-gray-800 border border-gray-200'} rounded-2xl p-4 shadow-sm`}>
+                  
+                  {/* 文字內容 */}
+                  <div className="whitespace-pre-line leading-relaxed">
+                    {msg.text}
+                  </div>
+
+                  {/* 選項區域 - 卡片式 */}
+                  {msg.options && msg.options[0].type === 'card' && (
+                    <div className="mt-4 space-y-2">
+                      {msg.options.map((opt, idx) => (
+                        <button 
+                          key={idx}
+                          onClick={(e) => handleOptionClick(opt, e)}
+                          className="w-full text-left p-3 rounded-xl border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all bg-white group"
+                        >
+                          <div className="font-bold text-blue-900 group-hover:text-blue-600">{opt.label}</div>
+                          <div className="text-xs text-gray-500 mt-1">{opt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 選項區域 - Chips */}
+                  {msg.options && msg.options[0].type === 'chip' && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {msg.options.map((opt, idx) => (
+                        <button 
+                          key={idx}
+                          onClick={(e) => handleOptionClick(opt, e)}
+                          className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-sm font-medium hover:bg-blue-200 transition-colors"
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 結果展示卡片 */}
+                  {msg.isResult && msg.courses && (
+                    <div className="mt-4 space-y-3">
+                      {msg.courses.length > 0 ? msg.courses.map(course => (
+                        <div key={course.id} className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                           <div className="flex justify-between items-start mb-1">
+                             <span className="text-xs font-bold text-blue-600 bg-blue-200 px-1.5 py-0.5 rounded">{course.type}</span>
+                             <span className="text-xs text-gray-500">{course.domain}</span>
+                           </div>
+                           <h4 className="font-bold text-gray-800 text-sm mb-1">{course.title}</h4>
+                           <div className="text-xs text-gray-600 space-y-0.5">
+                             <div className="flex items-center gap-1"><MapPin size={10}/> {course.location}</div>
+                             <div className="flex items-center gap-1"><DollarSign size={10}/> {course.price === 0 ? "免費" : `$${course.price.toLocaleString()}`}</div>
+                           </div>
+                           <button 
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               handleCourseClick(course.id);
+                             }}
+                             className="mt-2 w-full py-1.5 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700 transition-colors"
+                           >
+                             查看詳情
+                           </button>
+                        </div>
+                      )) : (
+                        <div className="text-sm text-gray-500 italic p-2">
+                          抱歉，目前找不到完全符合的課程。試試放寬地點限制？
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Area */}
+          <div className="p-3 bg-white border-t border-gray-200">
+            <div className="flex items-center gap-2 bg-gray-100 rounded-full px-4 py-2">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  setInput(e.target.value);
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.stopPropagation();
+                    handleSend(e);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="輸入訊息..."
+                className="bg-transparent flex-1 outline-none text-sm"
+                disabled={messages[messages.length-1]?.allowInput === false}
+              />
+              <button 
+                onClick={(e) => handleSend(e)}
+                className={`p-1.5 rounded-full ${input.trim() ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-500'}`}
+              >
+                <Send size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 縮圖按鈕 (Avatar) */}
+      {!isOpen && (
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(true);
+          }}
+          className="group relative flex items-center justify-center w-16 h-16 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-all hover:scale-105 active:scale-95"
+        >
+          <Zap size={32} fill="currentColor" />
+          <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white"></span>
+          
+          {/* Tooltip */}
+          <div className="absolute right-full mr-4 bg-white text-gray-800 px-4 py-2 rounded-xl shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none text-sm font-medium">
+            👋 嗨！我是職涯領航員，找課程問我！
+            <div className="absolute top-1/2 -right-1 w-2 h-2 bg-white transform -translate-y-1/2 rotate-45"></div>
+          </div>
+        </button>
+      )}
+    </div>
+  );
+};
+
+// --- 4. 網站主體元件 ---
+const App = () => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState("全部"); // 全部, 在職, 職前
+  const [highlightedCourseId, setHighlightedCourseId] = useState(null);
+  
+  // 處理 chatbot 課程點擊，滾動到對應課程並高亮
+  const handleCourseClick = (courseId) => {
+    setHighlightedCourseId(courseId);
+    // 關閉 chatbot（可選）
+    // setIsChatbotOpen(false);
+    
+    // 滾動到對應的課程卡片
+    setTimeout(() => {
+      const courseElement = document.getElementById(`course-${courseId}`);
+      if (courseElement) {
+        courseElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        // 3 秒後移除高亮效果
+        setTimeout(() => {
+          setHighlightedCourseId(null);
+        }, 3000);
+      }
+    }, 100);
+  };
+  
+  const filteredCourses = COURSES_DATA.filter(course => {
+    const matchesSearch = searchTerm === "" || course.title.includes(searchTerm) || course.tags.some(tag => tag.includes(searchTerm));
+    const matchesType = filterType === "全部" || course.type === filterType;
+    return matchesSearch && matchesType;
+  });
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans">
+      {/* Navbar */}
+      <header className="bg-white shadow-sm sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white">
+              <Briefcase size={20} />
+            </div>
+            <span className="font-bold text-xl tracking-tight text-gray-900">職業訓練整合網 <span className="text-blue-600 text-sm font-normal align-top">PRO</span></span>
+          </div>
+          
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
+            <a href="#" className="hover:text-blue-600">課程查詢</a>
+            <a href="#" className="hover:text-blue-600">補助計畫</a>
+            <a href="#" className="hover:text-blue-600">職涯地圖</a>
+            <a href="#" className="hover:text-blue-600">常見問答</a>
+          </nav>
+
+          <div className="flex items-center gap-4">
+            <Bell size={20} className="text-gray-400 hover:text-gray-600 cursor-pointer" />
+            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-gray-500">
+              <User size={18} />
+            </div>
+            <Menu className="md:hidden text-gray-600" />
+          </div>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <div className="relative bg-gradient-to-r from-blue-700 to-indigo-800 text-white overflow-hidden">
+        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
+          <div className="md:w-2/3">
+            <h1 className="text-4xl md:text-5xl font-extrabold mb-6 leading-tight">
+              投資你的未來，<br/>
+              <span className="text-yellow-400">技能升級</span> 從現在開始。
+            </h1>
+            <p className="text-lg text-blue-100 mb-8 max-w-xl">
+              彙整全台政府補助課程，無論是轉職就業或在職進修，我們提供最完整的學習資源與職涯導航。
+            </p>
+            
+            {/* Search Bar */}
+            <div className="bg-white p-2 rounded-lg shadow-lg flex flex-col md:flex-row gap-2 max-w-2xl">
+              <div className="flex-1 flex items-center px-4 bg-gray-50 rounded border border-gray-200">
+                <Search className="text-gray-400" size={20} />
+                <input 
+                  type="text" 
+                  placeholder="輸入關鍵字：Python、咖啡、行銷..." 
+                  className="w-full p-3 bg-transparent outline-none text-gray-800 placeholder-gray-400"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded font-bold transition-colors">
+                搜尋課程
+              </button>
+            </div>
+            
+            <div className="mt-6 flex gap-4 text-sm text-blue-200">
+              <span>熱門搜尋：</span>
+              <span className="underline cursor-pointer hover:text-white">AI 應用</span>
+              <span className="underline cursor-pointer hover:text-white">烘焙證照</span>
+              <span className="underline cursor-pointer hover:text-white">英文商務</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        
+        {/* Filter Tabs */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <BookOpen className="text-blue-600" /> 最新開課資訊
+            </h2>
+          </div>
+          <div className="flex bg-white rounded-lg p-1 shadow-sm border border-gray-200">
+            {["全部", "在職", "職前"].map(type => (
+              <button 
+                key={type}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFilterType(type);
+                }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  filterType === type 
+                  ? "bg-blue-100 text-blue-700" 
+                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {type}訓練
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Course Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredCourses.map(course => (
+            <div 
+              id={`course-${course.id}`}
+              key={course.id} 
+              className={`bg-white rounded-xl shadow-sm border-2 hover:shadow-md transition-all flex flex-col group ${
+                highlightedCourseId === course.id 
+                  ? 'border-blue-500 shadow-lg ring-4 ring-blue-200' 
+                  : 'border-gray-200'
+              }`}
+            >
+              {/* Card Header */}
+              <div className="p-5 flex-1">
+                <div className="flex justify-between items-start mb-3">
+                  <span className={`px-2.5 py-1 rounded text-xs font-bold ${
+                    course.type === '在職' 
+                    ? 'bg-purple-100 text-purple-700' 
+                    : 'bg-green-100 text-green-700'
+                  }`}>
+                    {course.type}
+                  </span>
+                  <div className="flex items-center gap-1 text-yellow-500 text-xs font-bold">
+                    <Star size={14} fill="currentColor" />
+                    {course.rating}
+                  </div>
+                </div>
+                
+                <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
+                  {course.title}
+                </h3>
+                
+                <div className="space-y-2 text-sm text-gray-600 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={16} className="text-gray-400" />
+                    <span className="truncate">{course.period}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock size={16} className="text-gray-400" />
+                    <span className="truncate">{course.time}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin size={16} className="text-gray-400" />
+                    <span className="truncate">{course.location}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mt-auto">
+                  {course.tags.slice(0, 3).map((tag, i) => (
+                    <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Card Footer */}
+              <div className="p-4 border-t border-gray-100 bg-gray-50 rounded-b-xl flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-gray-500">自付額</div>
+                  <div className="text-lg font-bold text-gray-900">
+                    NT$ {course.price.toLocaleString()}
+                  </div>
+                </div>
+                <button className="flex items-center gap-1 text-blue-600 font-medium hover:text-blue-800 transition-colors">
+                  詳細資訊 <ChevronRight size={18} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {filteredCourses.length === 0 && (
+          <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+            <div className="text-gray-400 mb-2">無法找到相關課程</div>
+            <p className="text-sm text-gray-500">試試看不同的關鍵字或篩選條件</p>
+          </div>
+        )}
+
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-gray-800 text-gray-300 py-10 mt-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div>
+            <div className="text-white font-bold text-lg mb-4">職業訓練整合網</div>
+            <p className="text-sm">
+              勞動部勞動力發展署版權所有<br/>
+              服務專線：0800-777-888
+            </p>
+          </div>
+          <div>
+            <h4 className="text-white font-bold mb-4">快速連結</h4>
+            <ul className="space-y-2 text-sm">
+              <li><a href="#" className="hover:text-white">找課程</a></li>
+              <li><a href="#" className="hover:text-white">找補助</a></li>
+              <li><a href="#" className="hover:text-white">最新消息</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-white font-bold mb-4">相關資源</h4>
+            <ul className="space-y-2 text-sm">
+              <li><a href="#" className="hover:text-white">台灣就業通</a></li>
+              <li><a href="#" className="hover:text-white">產業新尖兵</a></li>
+              <li><a href="#" className="hover:text-white">青年職訓</a></li>
+            </ul>
+          </div>
+        </div>
+      </footer>
+
+      {/* Chatbot Integration */}
+      <ChatBot onCourseClick={handleCourseClick} />
+      
+    </div>
+  );
+};
+
+export default App;
